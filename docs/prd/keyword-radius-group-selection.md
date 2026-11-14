@@ -53,6 +53,9 @@ Fitur ini tidak membaca atau menulis format baru. Fitur hanya membaca `YmapEntit
 
 ## Risks & open questions
 - **Performa (diputuskan, lihat R6d):** ambang FPS 20% di R6d hanyalah perkiraan. Kalau pengukuran nyata menunjukkan masih berat, langkah berikutnya adalah membuat index spasial. Langkah ini sengaja tidak dimasukkan sekarang.
+  - *Hasil ukur 2026-11-15 (build Release, data sintetis):* `KeywordSelectMatches` atas 50.000 entity butuh ±1ms per sapuan (build Debug ±2–3ms). Karena sapuan hanya jalan saat brush bergeser ≥25% radius, index spasial belum diperlukan.
+  - *Diperbaiki:* versi awal menambah hasil sapuan satu per satu lewat `SelectItem`. Cara ini mengambil render lock (dipegang selama satu frame penuh) di setiap item dan menyalin daftar seleksi setiap kali. Akibatnya 100 props bisa membuat UI macet ±1–2 detik. Sekarang semua hasil dipasang sekaligus dengan satu lock.
+  - *Belum diukur:* FPS di aplikasi yang berjalan, di pusat kota Los Santos (acceptance R6d).
 - **Definisi "menyentuh" (diputuskan):** props terpilih kalau batas luar modelnya (bounding sphere, `BSCenter`/`BSRadius`) bersinggungan dengan brush (R6).
 - **Bentuk brush (diputuskan, lihat R6c):** user memilih sendiri antara Bola 3D dan Lingkaran datar.
 - **Entity di luar project (diputuskan: bebas, lihat R6b):** perlu dicek apakah aksi lanjutan seperti move, delete dan copy pada entity yang ymap-nya tidak ada di project berjalan sama seperti seleksi tunggal di CodeWalker sekarang, atau malah memunculkan prompt untuk menambahkan ymap ke project. *Dijawab oleh: developer.*

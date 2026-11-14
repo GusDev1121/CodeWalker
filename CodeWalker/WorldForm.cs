@@ -3632,15 +3632,7 @@ namespace CodeWalker
                         UpdateSelectionUI(true);
                     }
 
-                    Widget.Visible = SelectedItem.CanShowWidget;
-                    if (Widget.Visible)
-                    {
-                        Widget.Position = SelectedItem.WidgetPosition;
-                        Widget.Rotation = SelectedItem.WidgetRotation;
-                        Widget.RotationWidget.EnableAxes = SelectedItem.WidgetRotationAxes;
-                        Widget.ScaleWidget.LockXY = SelectedItem.WidgetScaleLockXY;
-                        Widget.Scale = SelectedItem.WidgetScale;
-                    }
+                    UpdateWidgetForSelection();
                 }
             }
             if (notifyProject && change && (ProjectForm != null) && (!addSelection || manualSelection))
@@ -3659,6 +3651,18 @@ namespace CodeWalker
             {
                 // If an item has been selected the user is likely to use a keybind. We need focus!
                 //Focus();//DISABLED THIS due to causing problems with using arrows to select in project window!
+            }
+        }
+        private void UpdateWidgetForSelection()
+        {
+            Widget.Visible = SelectedItem.CanShowWidget;
+            if (Widget.Visible)
+            {
+                Widget.Position = SelectedItem.WidgetPosition;
+                Widget.Rotation = SelectedItem.WidgetRotation;
+                Widget.RotationWidget.EnableAxes = SelectedItem.WidgetRotationAxes;
+                Widget.ScaleWidget.LockXY = SelectedItem.WidgetScaleLockXY;
+                Widget.Scale = SelectedItem.WidgetScale;
             }
         }
         public void SelectMulti(MapSelection[] items, bool addSelection = false, bool notifyProject = true)
@@ -5691,15 +5695,20 @@ namespace CodeWalker
             }
             KeywordSelectLastSweepPos = center;
 
-            //SelectItem with addSelection toggles, so skip anything already selected
-            var selected = new HashSet<YmapEntityDef>();
-            if (SelectedItem.EntityDef != null) selected.Add(SelectedItem.EntityDef);
+            //start from the current selection; skip anything already in it so nothing is added twice
+            var items = new List<MapSelection>();
             if (SelectedItem.MultipleSelectionItems != null)
             {
-                foreach (var item in SelectedItem.MultipleSelectionItems)
-                {
-                    if (item.EntityDef != null) selected.Add(item.EntityDef);
-                }
+                items.AddRange(SelectedItem.MultipleSelectionItems);
+            }
+            else if (SelectedItem.HasValue)
+            {
+                items.Add(SelectedItem);
+            }
+            var selected = new HashSet<YmapEntityDef>();
+            foreach (var item in items)
+            {
+                if (item.EntityDef != null) selected.Add(item.EntityDef);
             }
 
             var flat = KeywordSelectFlat;
@@ -5712,22 +5721,44 @@ namespace CodeWalker
                 {
                     if ((ent == null) || selected.Contains(ent)) continue;
                     if (!KeywordSelectMatches(ent, keyword, center, radius, flat)) continue;
-                    SelectItem(MapSelection.FromProjectObject(this, ent), true, false, false);
+                    var ms = MapSelection.FromProjectObject(this, ent);
+                    if (ms.Archetype != null) ms.Drawable = gameFileCache.TryGetDrawable(ms.Archetype); //as SelectItem does, for the info panel
+                    items.Add(ms);
                     selected.Add(ent);
                     added++;
                 }
             }
+            if (added == 0) return;
 
-            if (added > 0)
+            //apply in one step: SelectItem per item takes the render lock (held for a whole frame) every call and copies the list each time
+            MapSelection sel;
+            if (items.Count == 1)
             {
-                UpdateSelectionUI(true);
-                if (ProjectForm != null)
-                {
-                    ProjectForm.OnWorldSelectionChanged(SelectedItem);
-                }
-                var total = SelectedItem.MultipleSelectionItems?.Length ?? (SelectedItem.HasValue ? 1 : 0);
-                UpdateStatus(string.Format("Keyword select: added {0}, {1} item(s) selected.", added, total));
+                sel = items[0];
             }
+            else
+            {
+                for (int i = 0; i < items.Count; i++)
+                {
+                    var item = items[i];
+                    item.SetMultipleSelectionItems(null);
+                    items[i] = item;
+                }
+                sel = new MapSelection();
+                sel.WorldForm = this;
+                sel.SetMultipleSelectionItems(items.ToArray());
+            }
+            lock (Renderer.RenderSyncRoot) //drawflags is used when rendering.. need that lock
+            {
+                SelectedItem = sel;
+                UpdateWidgetForSelection();
+            }
+            UpdateSelectionUI(true);
+            if (ProjectForm != null)
+            {
+                ProjectForm.OnWorldSelectionChanged(SelectedItem);
+            }
+            UpdateStatus(string.Format("Keyword select: added {0}, {1} item(s) selected.", added, items.Count));
         }
 
         public static bool KeywordSelectMatches(YmapEntityDef ent, string keyword, Vector3 center, float radius, bool flat)
