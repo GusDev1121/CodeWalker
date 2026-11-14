@@ -305,6 +305,10 @@ namespace CodeWalker
             this.toolStripSeparator6 = new System.Windows.Forms.ToolStripSeparator();
             this.ToolbarCopyButton = new System.Windows.Forms.ToolStripButton();
             this.ToolbarPasteButton = new System.Windows.Forms.ToolStripButton();
+            this.ToolbarKeywordSelectButton = new System.Windows.Forms.ToolStripButton();
+            this.toolStripSeparator8 = new System.Windows.Forms.ToolStripSeparator();
+            this.ToolbarKeywordTextBox = new System.Windows.Forms.ToolStripTextBox();
+            this.ToolbarKeywordShapeComboBox = new System.Windows.Forms.ToolStripComboBox();
             this.toolStripSeparator7 = new System.Windows.Forms.ToolStripSeparator();
             this.ToolbarCameraModeButton = new System.Windows.Forms.ToolStripSplitButton();
             this.ToolbarCameraPerspectiveButton = new System.Windows.Forms.ToolStripMenuItem();
@@ -2889,6 +2893,8 @@ namespace CodeWalker
             this.ToolbarPanel.BackColor = System.Drawing.SystemColors.Control;
             this.ToolbarPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.ToolbarPanel.Controls.Add(this.Toolbar);
+            this.ToolbarPanel.AutoSize = true;
+            this.ToolbarPanel.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
             this.ToolbarPanel.Location = new System.Drawing.Point(12, 12);
             this.ToolbarPanel.Name = "ToolbarPanel";
             this.ToolbarPanel.Size = new System.Drawing.Size(557, 26);
@@ -2906,6 +2912,7 @@ namespace CodeWalker
             this.ToolbarSaveAllButton,
             this.toolStripSeparator5,
             this.ToolbarSelectButton,
+            this.ToolbarKeywordSelectButton,
             this.toolStripSeparator1,
             this.ToolbarMoveButton,
             this.ToolbarRotateButton,
@@ -2925,7 +2932,10 @@ namespace CodeWalker
             this.ToolbarCopyButton,
             this.ToolbarPasteButton,
             this.toolStripSeparator7,
-            this.ToolbarCameraModeButton});
+            this.ToolbarCameraModeButton,
+            this.toolStripSeparator8,
+            this.ToolbarKeywordTextBox,
+            this.ToolbarKeywordShapeComboBox});
             this.Toolbar.Location = new System.Drawing.Point(1, 0);
             this.Toolbar.Name = "Toolbar";
             this.Toolbar.Size = new System.Drawing.Size(554, 25);
@@ -3542,8 +3552,39 @@ namespace CodeWalker
             this.ToolbarPasteButton.ToolTipText = "Paste (Ctrl+V)";
             this.ToolbarPasteButton.Click += new System.EventHandler(this.ToolbarPasteButton_Click);
             // 
+            // ToolbarKeywordSelectButton
+            //
+            this.ToolbarKeywordSelectButton.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
+            this.ToolbarKeywordSelectButton.Name = "ToolbarKeywordSelectButton";
+            this.ToolbarKeywordSelectButton.Size = new System.Drawing.Size(27, 22);
+            this.ToolbarKeywordSelectButton.Text = "KW";
+            this.ToolbarKeywordSelectButton.ToolTipText = "Keyword radius select (H)";
+            this.ToolbarKeywordSelectButton.Click += new System.EventHandler(this.ToolbarKeywordSelectButton_Click);
+            //
+            // toolStripSeparator8
+            //
+            this.toolStripSeparator8.Name = "toolStripSeparator8";
+            this.toolStripSeparator8.Size = new System.Drawing.Size(6, 25);
+            //
+            // ToolbarKeywordTextBox
+            //
+            this.ToolbarKeywordTextBox.Name = "ToolbarKeywordTextBox";
+            this.ToolbarKeywordTextBox.Size = new System.Drawing.Size(100, 25);
+            this.ToolbarKeywordTextBox.ToolTipText = "Keyword select: part of the model name, e.g. bench";
+            //
+            // ToolbarKeywordShapeComboBox
+            //
+            this.ToolbarKeywordShapeComboBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.ToolbarKeywordShapeComboBox.Items.AddRange(new object[] {
+            "3D sphere",
+            "Flat circle"});
+            this.ToolbarKeywordShapeComboBox.Name = "ToolbarKeywordShapeComboBox";
+            this.ToolbarKeywordShapeComboBox.Size = new System.Drawing.Size(85, 25);
+            this.ToolbarKeywordShapeComboBox.ToolTipText = "Keyword select brush shape (flat circle ignores height)";
+            this.ToolbarKeywordShapeComboBox.SelectedIndexChanged += new System.EventHandler(this.ToolbarKeywordShapeComboBox_SelectedIndexChanged);
+            //
             // toolStripSeparator7
-            // 
+            //
             this.toolStripSeparator7.Name = "toolStripSeparator7";
             this.toolStripSeparator7.Size = new System.Drawing.Size(6, 25);
             // 
@@ -3889,6 +3930,10 @@ namespace CodeWalker
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator6;
         private System.Windows.Forms.ToolStripButton ToolbarCopyButton;
         private System.Windows.Forms.ToolStripButton ToolbarPasteButton;
+        private System.Windows.Forms.ToolStripButton ToolbarKeywordSelectButton;
+        private System.Windows.Forms.ToolStripSeparator toolStripSeparator8;
+        private System.Windows.Forms.ToolStripTextBox ToolbarKeywordTextBox;
+        private System.Windows.Forms.ToolStripComboBox ToolbarKeywordShapeComboBox;
         private System.Windows.Forms.ToolStripMenuItem ToolbarUndoListButton;
         private System.Windows.Forms.ToolStripMenuItem ToolbarRedoListButton;
         private System.Windows.Forms.CheckBox ShowToolbarCheckBox;

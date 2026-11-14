@@ -82,6 +82,11 @@ namespace CodeWalker
 
         int ControlBrushTimer = 0;
         bool ControlBrushEnabled;
+        bool KeywordSelectEnabled;
+        float KeywordSelectRadius = 5.0f;
+        NumericUpDown KeywordSelectRadiusUpDown;
+        bool KeywordSelectFlat = Settings.Default.KeywordSelectFlat;
+        Vector3 KeywordSelectLastSweepPos = new Vector3(float.MaxValue);
         //float ControlBrushRadius;
 
         Entity camEntity = new Entity();
@@ -215,6 +220,12 @@ namespace CodeWalker
         public WorldForm()
         {
             InitializeComponent();
+
+            // built here, not in the designer: the designer can't host a NumericUpDown in a ToolStrip
+            KeywordSelectRadiusUpDown = new NumericUpDown { Minimum = 0.5M, Maximum = 200M, DecimalPlaces = 1, Increment = 0.5M, Value = (decimal)KeywordSelectRadius, Width = 60 };
+            KeywordSelectRadiusUpDown.ValueChanged += (s, e) => KeywordSelectRadius = (float)KeywordSelectRadiusUpDown.Value;
+            Toolbar.Items.Insert(Toolbar.Items.IndexOf(ToolbarKeywordTextBox) + 1, new ToolStripControlHost(KeywordSelectRadiusUpDown) { ToolTipText = "Keyword select radius (Ctrl+scroll)" });
+            ToolbarKeywordShapeComboBox.SelectedIndex = KeywordSelectFlat ? 1 : 0;
 
             Renderer = new Renderer(this, gameFileCache);
             camera = Renderer.camera;
@@ -1324,12 +1335,18 @@ namespace CodeWalker
             const uint cgrn = 0xFF00FF00;
             const uint cblu = 0xFFFF0000;
             const uint caqu = 0xFFFFFF00;
-            //const uint cyel = 0xFF00FFFF;
+            const uint cyel = 0xFF00FFFF;
 
             if (ControlBrushEnabled && MouseRayCollision.Hit)
             {
                 var arup = MouseRayCollision.Normal.GetPerpVec();
                 Renderer.RenderBrushRadiusOutline(MouseRayCollision.Position, MouseRayCollision.Normal, arup, ProjectForm.GetInstanceBrushRadius(), cgrn);
+            }
+            if (KeywordSelectEnabled && MouseRayCollision.Hit)
+            {
+                // flat mode ignores height, so draw the circle level instead of along the surface
+                var nrm = KeywordSelectFlat ? Vector3.UnitZ : MouseRayCollision.Normal;
+                Renderer.RenderBrushRadiusOutline(MouseRayCollision.Position, nrm, nrm.GetPerpVec(), KeywordSelectRadius, cyel);
             }
             if (MouseRayCollisionVisible && MouseRayCollision.Hit)
             {
@@ -2118,6 +2135,7 @@ namespace CodeWalker
             ToolbarRotateButton.ToolTipText = string.Format("Rotate ({0})", kb.EditRotation);
             ToolbarScaleButton.ToolTipText = string.Format("Scale ({0})", kb.EditScale);
             ShowToolbarCheckBox.Text = string.Format("Show Toolbar ({0})", kb.ToggleToolbar);
+            ToolbarKeywordSelectButton.ToolTipText = string.Format("Keyword radius select ({0})", kb.ToggleKeywordSelect);
         }
 
 
@@ -2337,8 +2355,14 @@ namespace CodeWalker
             //reset variables for beginning the mouse hit test
             CurMouseHit.Clear();
 
-         
-            if (Input.CtrlPressed && ProjectForm != null && ProjectForm.CanPaintInstances())   // Get whether or not we can brush from the project form.
+
+            if (KeywordSelectEnabled) // keyword select brush excludes the instance brush (R10)
+            {
+                ControlBrushEnabled = false;
+                MouseRayCollisionVisible = false;
+                MouseRayCollision = GetSpaceMouseRay();
+            }
+            else if (Input.CtrlPressed && ProjectForm != null && ProjectForm.CanPaintInstances())   // Get whether or not we can brush from the project form.
             {
                 ControlBrushEnabled = true;
                 MouseRayCollisionVisible = false;
@@ -5631,6 +5655,95 @@ namespace CodeWalker
             }
         }
 
+        private void SetKeywordSelect(bool enable)
+        {
+            KeywordSelectEnabled = enable;
+            ToolbarKeywordSelectButton.Checked = enable;
+        }
+
+        // Adds every full-detail ymap entity whose model name contains the toolbar keyword and whose
+        // bounding sphere touches the brush. Runs on the UI thread from mouse down/move.
+        private void KeywordSelectSweep(bool clicked)
+        {
+            var hit = MouseRayCollision; //written by the render thread each frame
+            if (!hit.Hit) return;
+
+            var keyword = ToolbarKeywordTextBox.Text.Trim();
+            if (keyword.Length == 0)
+            {
+                if (clicked) UpdateStatus("Keyword select: type a keyword in the toolbar first.");
+                return;
+            }
+
+            var center = hit.Position;
+            var radius = KeywordSelectRadius;
+            if (Vector3.Distance(center, KeywordSelectLastSweepPos) < radius * 0.25f) return; //brush hasn't moved enough to find anything new
+
+            YmapFile[] ymaps;
+            if (!Monitor.TryEnter(Renderer.RenderSyncRoot, 50)) return; //frame busy; the next mouse move retries
+            try
+            {
+                ymaps = Renderer.VisibleYmaps.ToArray();
+            }
+            finally
+            {
+                Monitor.Exit(Renderer.RenderSyncRoot);
+            }
+            KeywordSelectLastSweepPos = center;
+
+            //SelectItem with addSelection toggles, so skip anything already selected
+            var selected = new HashSet<YmapEntityDef>();
+            if (SelectedItem.EntityDef != null) selected.Add(SelectedItem.EntityDef);
+            if (SelectedItem.MultipleSelectionItems != null)
+            {
+                foreach (var item in SelectedItem.MultipleSelectionItems)
+                {
+                    if (item.EntityDef != null) selected.Add(item.EntityDef);
+                }
+            }
+
+            var flat = KeywordSelectFlat;
+            int added = 0;
+            foreach (var ymap in ymaps)
+            {
+                var ents = ymap?.AllEntities;
+                if (ents == null) continue;
+                foreach (var ent in ents)
+                {
+                    if ((ent == null) || selected.Contains(ent)) continue;
+                    if (!KeywordSelectMatches(ent, keyword, center, radius, flat)) continue;
+                    SelectItem(MapSelection.FromProjectObject(this, ent), true, false, false);
+                    selected.Add(ent);
+                    added++;
+                }
+            }
+
+            if (added > 0)
+            {
+                UpdateSelectionUI(true);
+                if (ProjectForm != null)
+                {
+                    ProjectForm.OnWorldSelectionChanged(SelectedItem);
+                }
+                var total = SelectedItem.MultipleSelectionItems?.Length ?? (SelectedItem.HasValue ? 1 : 0);
+                UpdateStatus(string.Format("Keyword select: added {0}, {1} item(s) selected.", added, total));
+            }
+        }
+
+        public static bool KeywordSelectMatches(YmapEntityDef ent, string keyword, Vector3 center, float radius, bool flat)
+        {
+            var lod = ent._CEntityDef.lodLevel;
+            if ((lod != rage__eLodType.LODTYPES_DEPTH_HD) && (lod != rage__eLodType.LODTYPES_DEPTH_ORPHANHD)) return false; //full detail only
+
+            var d = ent.Position + ent.BSCenter - center; //BSCenter is relative to the entity position
+            if (flat) d.Z = 0;
+            var reach = radius + ent.BSRadius;
+            if (d.LengthSquared() > (reach * reach)) return false;
+
+            var name = ent.Archetype?.Name ?? JenkIndex.GetString(ent._CEntityDef.archetypeName);
+            return (name != null) && (name.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
         private void SetWidgetMode(string mode)
         {
             ToolbarMoveButton.Checked = false;
@@ -6155,7 +6268,15 @@ namespace CodeWalker
             Input.CtrlPressed = (ModifierKeys & Keys.Control) > 0;
             Input.ShiftPressed = (ModifierKeys & Keys.Shift) > 0;
 
-            if (ControlMode == WorldControlMode.Free && !ControlBrushEnabled)
+            if (KeywordSelectEnabled && (ControlMode == WorldControlMode.Free))
+            {
+                if (MouseLButtonDown)
+                {
+                    KeywordSelectLastSweepPos = new Vector3(float.MaxValue); //always sweep at the click point
+                    KeywordSelectSweep(true);
+                }
+            }
+            else if (ControlMode == WorldControlMode.Free && !ControlBrushEnabled)
             {
                 if (MouseLButtonDown)
                 {
@@ -6284,7 +6405,21 @@ namespace CodeWalker
                 dy = -dy;
             }
 
-            if (ControlMode == WorldControlMode.Free && !ControlBrushEnabled)
+            if (KeywordSelectEnabled && (ControlMode == WorldControlMode.Free))
+            {
+                if (MouseRButtonDown)
+                {
+                    RotateCam(dx, dy);
+                }
+
+                UpdateMousePosition(e);
+
+                if (MouseLButtonDown)
+                {
+                    KeywordSelectSweep(false);
+                }
+            }
+            else if (ControlMode == WorldControlMode.Free && !ControlBrushEnabled)
             {
                 if (MouseLButtonDown)
                 {
@@ -6429,7 +6564,15 @@ namespace CodeWalker
         {
             if (e.Delta != 0)
             {
-                if (ControlMode == WorldControlMode.Free || ControlBrushEnabled)
+                if (KeywordSelectEnabled && Input.CtrlPressed)
+                {
+                    // 10% per wheel notch; the up-down clamps to its min/max and updates KeywordSelectRadius
+                    var r = KeywordSelectRadius * Math.Pow(1.1, e.Delta / 120.0);
+                    var min = (double)KeywordSelectRadiusUpDown.Minimum;
+                    var max = (double)KeywordSelectRadiusUpDown.Maximum;
+                    KeywordSelectRadiusUpDown.Value = (decimal)Math.Round(Math.Min(Math.Max(r, min), max), 1);
+                }
+                else if (ControlMode == WorldControlMode.Free || ControlBrushEnabled)
                 {
                     camera.MouseZoom(e.Delta);
                 }
@@ -6446,6 +6589,7 @@ namespace CodeWalker
 
         private void WorldForm_KeyDown(object sender, KeyEventArgs e)
         {
+            if (ToolbarKeywordTextBox.Focused || KeywordSelectRadiusUpDown.ContainsFocus) return; //typing in the toolbar fields, not controlling the world
             if (ActiveControl is TextBox)
             {
                 var tb = ActiveControl as TextBox;
@@ -6508,6 +6652,10 @@ namespace CodeWalker
                     if (k == kb.ToggleMouseSelect)
                     {
                         SetMouseSelect(!MouseSelectEnabled);
+                    }
+                    if (k == kb.ToggleKeywordSelect)
+                    {
+                        SetKeywordSelect(!KeywordSelectEnabled);
                     }
                     if (k == kb.ToggleToolbar)
                     {
@@ -7880,6 +8028,21 @@ namespace CodeWalker
         private void ToolbarPasteButton_Click(object sender, EventArgs e)
         {
             PasteItem();
+        }
+
+        private void ToolbarKeywordSelectButton_Click(object sender, EventArgs e)
+        {
+            SetKeywordSelect(!KeywordSelectEnabled);
+        }
+
+        private void ToolbarKeywordShapeComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            KeywordSelectFlat = (ToolbarKeywordShapeComboBox.SelectedIndex == 1);
+            if (Settings.Default.KeywordSelectFlat != KeywordSelectFlat)
+            {
+                Settings.Default.KeywordSelectFlat = KeywordSelectFlat;
+                Settings.Default.Save();
+            }
         }
 
         private void ToolbarCameraModeButton_ButtonClick(object sender, EventArgs e)

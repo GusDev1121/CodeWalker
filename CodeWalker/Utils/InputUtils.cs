@@ -260,6 +260,7 @@ namespace CodeWalker
         public Keys EditScale = Keys.R;
         public Keys Jump = Keys.Space; //for control mode
         public Keys FirstPerson = Keys.P;
+        public Keys ToggleKeywordSelect = Keys.H;
 
         public KeyBindings(StringCollection sc)
         {
@@ -294,6 +295,7 @@ namespace CodeWalker
                 case "Edit Rotation": EditRotation = k; break;
                 case "Edit Scale": EditScale = k; break;
                 case "First Person Mode": FirstPerson = k; break;
+                case "Toggle Keyword Select": ToggleKeywordSelect = k; break;
             }
         }
 
@@ -315,6 +317,7 @@ namespace CodeWalker
             sc.Add(GetSettingItem("Edit Rotation", EditRotation));
             sc.Add(GetSettingItem("Edit Scale", EditScale));
             sc.Add(GetSettingItem("First Person Mode", FirstPerson));
+            sc.Add(GetSettingItem("Toggle Keyword Select", ToggleKeywordSelect));
             return sc;
         }
 

@@ -670,7 +670,19 @@ namespace CodeWalker.Properties {
                 this["MouseInvert"] = value;
             }
         }
-        
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool KeywordSelectFlat {
+            get {
+                return ((bool)(this["KeywordSelectFlat"]));
+            }
+            set {
+                this["KeywordSelectFlat"] = value;
+            }
+        }
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("True")]
