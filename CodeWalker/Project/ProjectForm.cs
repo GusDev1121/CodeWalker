@@ -1959,7 +1959,8 @@ namespace CodeWalker.Project
         }
         public void SaveYmap(bool saveas = false)
         {
-            if (CurrentYmapFile == null) return;
+            var ymap = CurrentYmapFile;
+            if (ymap == null) return;
             string ymapname = CurrentYmapFile.Name;
             string filepath = CurrentYmapFile.FilePath;
             if (string.IsNullOrEmpty(filepath))
@@ -1981,6 +1982,7 @@ namespace CodeWalker.Project
                 if (saveas)
                 {
                     filepath = ShowSaveDialog("Ymap files|*.ymap", filepath);
+                    CurrentYmapFile = ymap; //the modal dialog pumps queued messages (e.g. world selection changes) that can switch or clear the current item
                     if (string.IsNullOrEmpty(filepath))
                     { return; }
                 }
@@ -2017,11 +2019,11 @@ namespace CodeWalker.Project
                 SetCurrentSaveItem();
             }
 
-            if (CurrentYmapFile.SaveWarnings != null)
+            if (ymap.SaveWarnings != null)
             {
-                string w = string.Join("\n", CurrentYmapFile.SaveWarnings);
-                MessageBox.Show(CurrentYmapFile.SaveWarnings.Count.ToString() + " warnings were generated while saving the ymap:\n" + w);
-                CurrentYmapFile.SaveWarnings = null;//clear it out for next time..
+                string w = string.Join("\n", ymap.SaveWarnings);
+                MessageBox.Show(ymap.SaveWarnings.Count.ToString() + " warnings were generated while saving the ymap:\n" + w);
+                ymap.SaveWarnings = null;//clear it out for next time..
             }
         }
         public void AddYmapToProject(YmapFile ymap)
@@ -7921,6 +7923,26 @@ namespace CodeWalker.Project
         }
         private void OnWorldMultiModified(MapSelection[] items)
         {
+            //like a single entity/cargen edit: the owning ymaps must join the project and be marked changed, or Save All skips them
+            var ymaps = new HashSet<YmapFile>();
+            foreach (var item in items)
+            {
+                var ent = item.EntityDef;
+                if ((ent != null) && (ent.MloParent == null) && (ent.Ymap != null)) ymaps.Add(ent.Ymap);
+                else if (item.CarGenerator?.Ymap != null) ymaps.Add(item.CarGenerator.Ymap);
+            }
+            foreach (var ymap in ymaps)
+            {
+                if (!YmapExistsInProject(ymap))
+                {
+                    AddYmapToProject(ymap); //also creates the project if needed and sets HasChanged
+                }
+                else if (!ymap.HasChanged)
+                {
+                    ymap.HasChanged = true;
+                    ProjectExplorer?.SetYmapHasChanged(ymap, true);
+                }
+            }
 
             if (items == CurrentMulti)
             {
